@@ -38,7 +38,7 @@ def train_one_epoch(model: torch.nn.Module,
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
         
-    if hasattr(model.module, 'quantize'):
+    if hasattr(model.modules, 'quantize'):
         try:
             model.module.quantize.reset_cluster_size(device)
             print("Reset the codebook statistic info in quantizer before each epoch")
