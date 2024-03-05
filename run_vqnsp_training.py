@@ -34,14 +34,15 @@ def get_args():
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--save_ckpt_freq', default=20, type=int)
     # Model parameters
-    parser.add_argument('--model', default='vqnsp_encoder_base_decoder_3x200x12', type=str, metavar='MODEL',  help='Name of model to train')  
+    parser.add_argument('--model', default='vqnsp_encoder_base_decoder_3x200x12', type=str, metavar='MODEL',
+                        help='Name of model to train')
 
     parser.add_argument('--codebook_n_emd', default=8192, type=int, metavar='MODEL',
                         help='number of codebook')
-    parser.add_argument('--codebook_emd_dim', default=32, type=int, metavar='MODEL',
+    parser.add_argument('--codebook_emd_dim', default=64, type=int, metavar='MODEL',
                         help='number of codebook')
     parser.add_argument('--ema_decay', default=0.99, type=float, metavar='MODEL', help='ema decay for quantizer')
-    parser.add_argument('--quantize_kmeans_init', action='store_true', help='enable kmeans_init for quantizer')
+    parser.add_argument('--quantize_kmeans_init', action='store_false', help='enable kmeans_init for quantizer')
 
     parser.add_argument('--input_size', default=1600, type=int, help='EEG input size for backbone')
 
@@ -50,15 +51,15 @@ def get_args():
                         help='Optimizer (default: "adamw"')
     parser.add_argument('--opt_eps', default=1e-8, type=float, metavar='EPSILON',
                         help='Optimizer Epsilon (default: 1e-8)')
-    parser.add_argument('--opt_betas', default=None, type=float, nargs='+', metavar='BETA',
+    parser.add_argument('--opt_betas', default=[0.9, 0.99], type=float, nargs='+', metavar='BETA',
                         help='Optimizer Betas (default: None, use opt default)')
     parser.add_argument('--clip_grad', type=float, default=None, metavar='NORM',
                         help='Clip gradient norm (default: None, no clipping)')
     parser.add_argument('--weight_decay', type=float, default=1e-4,
                         help='weight decay (default: 1e-4)')
     parser.add_argument('--weight_decay_end', type=float, default=None, help="""Final value of the
-        weight decay. We use a cosine schedule for WD. 
-        (Set the same value with args.weight_decay to keep weight decay no change)""")
+            weight decay. We use a cosine schedule for WD. 
+            (Set the same value with args.weight_decay to keep weight decay no change)""")
 
     parser.add_argument('--lr', type=float, default=5e-5, metavar='LR',
                         help='learning rate (default: 5e-5)')
@@ -67,18 +68,18 @@ def get_args():
     parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
 
-    parser.add_argument('--warmup_epochs', type=int, default=5, metavar='N',
+    parser.add_argument('--warmup_epochs', type=int, default=2, metavar='N',
                         help='epochs to warmup LR, if scheduler supports')
     parser.add_argument('--warmup_steps', type=int, default=-1, metavar='N',
                         help='epochs to warmup LR, if scheduler supports')
 
     # Dataset parameters
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='./checkpoints/vqnsp/',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default=None,
+    parser.add_argument('--log_dir', default='./log/vqnsp/',
                         help='path where to tensorboard log')
-    
-    parser.add_argument('--device', default='cuda',
+
+    parser.add_argument('--device', default='cuda:1',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
@@ -89,19 +90,19 @@ def get_args():
     parser.add_argument('--dist_eval', action='store_true', default=True,
                         help='Enabling distributed evaluation')
     parser.add_argument('--disable_eval', action='store_true', default=False)
-    
+
     parser.add_argument('--eval', action='store_true', default=False, help="Perform evaluation only")
     parser.add_argument('--calculate_codebook_usage', action='store_true', default=False)
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num_workers', default=24, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem',
                         help='')
     parser.set_defaults(pin_mem=True)
-    
+
     # distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
@@ -144,27 +145,58 @@ def main(args):
 
     model = get_model(args)
 
+    # # get dataset
+    # # datasets with the same montage can be packed within a sublist
+    # datasets_train = [
+    #     ["path/to/dataset1", "path/to/dataset2"], # e.g., 64 channels for dataset1 and dataset2
+    #     ["path/to/dataset3", "path/to/dataset4"], # e.g., 32 channels for dataset3 and dataset4
+    # ]
+    # # time window for each sublist in dataset_train
+    # # to ensure the total sequence length be around 256 for each dataset
+    # time_window = [
+    #     4, # set the time window to 4 so that the sequence length is 4 * 64 = 256
+    #     8, # set the time window to 8 so that the sequence length is 8 * 32 = 256
+    # ]
+    # dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window, stride_size=200)
+    #
+    # datasets_val = [
+    #     ["path/to/datasets_val"]
+    # ]
+    # if args.disable_eval:
+    #     dataset_val_list = None
+    # else:
+    #     dataset_val_list, val_ch_names_list = utils.build_pretraining_dataset(datasets_val, [4])
+
     # get dataset
     # datasets with the same montage can be packed within a sublist
     datasets_train = [
-        ["path/to/dataset1", "path/to/dataset2"], # e.g., 64 channels for dataset1 and dataset2
-        ["path/to/dataset3", "path/to/dataset4"], # e.g., 32 channels for dataset3 and dataset4
+        [
+            # '/root/autodl-pub/YYF/EEGdata/TUAB/Processed/TUABtrain.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUAR/Processed/TUAR.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUEP/Processed/TUEP.hdf5',
+            # '/root/autodl-pub/YYF/EEGdata/TUEV/Processed/TUEVtrain.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUSL/Processed/TUSL.hdf5',
+            # '/root/autodl-pub/YYF/EEGdata/TUSZ/Processed/TUSZtrain.hdf5',
+        ]
     ]
     # time window for each sublist in dataset_train
     # to ensure the total sequence length be around 256 for each dataset
     time_window = [
-        4, # set the time window to 4 so that the sequence length is 4 * 64 = 256
-        8, # set the time window to 8 so that the sequence length is 8 * 32 = 256
+        5,  # set the time window to 4 so that the sequence length is 4 * 64 = 256
     ]
-    dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window, stride_size=200)
+    dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window,
+                                                                              stride_size=200)
 
     datasets_val = [
-        ["path/to/datasets_val"]
+        ['/root/autodl-pub/YYF/EEGdata/TUEV/Processed/TUEVeval.hdf5',
+         '/root/autodl-pub/YYF/EEGdata/TUAB/Processed/TUABeval.hdf5',
+         # '/root/autodl-pub/YYF/EEGdata/TUSZ/Processed/TUSZdev.hdf5'
+         ]
     ]
     if args.disable_eval:
         dataset_val_list = None
     else:
-        dataset_val_list, val_ch_names_list = utils.build_pretraining_dataset(datasets_val, [4])
+        dataset_val_list, val_ch_names_list = utils.build_pretraining_dataset(datasets_val, [5])
 
     if True:  # args.distributed:
         num_tasks = utils.get_world_size()
