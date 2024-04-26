@@ -31,11 +31,11 @@ import modeling_vqnsp
 def get_args():
     parser = argparse.ArgumentParser('LaBraM pre-training script', add_help=False)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--epochs', default=300, type=int)
-    parser.add_argument('--save_ckpt_freq', default=20, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--save_ckpt_freq', default=5, type=int)
 
     # tokenizer settings
-    parser.add_argument("--tokenizer_weight", type=str)
+    parser.add_argument("--tokenizer_weight", type=str, default='./checkpoints/vqnsp.pth')
     parser.add_argument("--tokenizer_model", type=str, default="vqnsp_encoder_base_decoder_3x200x12")
     
     # Model parameters
@@ -52,21 +52,21 @@ def get_args():
     parser.add_argument('--input_size', default=1600, type=int,
                         help='EEG input size for backbone')
 
-    parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT',
+    parser.add_argument('--drop_path', type=float, default=0., metavar='PCT',
                         help='Drop path rate (default: 0.1)')
 
     # Tokenizer parameters
     parser.add_argument('--codebook_size', default=8192, type=int, help='number of codebook')
-    parser.add_argument('--codebook_dim', default=32, type=int, help='number of codebook')
+    parser.add_argument('--codebook_dim', default=64, type=int, help='number of codebook')
 
     # Optimizer parameters
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER',
                         help='Optimizer (default: "adamw"')
     parser.add_argument('--opt_eps', default=1e-8, type=float, metavar='EPSILON',
                         help='Optimizer Epsilon (default: 1e-8)')
-    parser.add_argument('--opt_betas', default=None, type=float, nargs='+', metavar='BETA',
+    parser.add_argument('--opt_betas', default=[0.9, 0.98], type=float, nargs='+', metavar='BETA',
                         help='Optimizer Betas (default: None, use opt default)')
-    parser.add_argument('--clip_grad', type=float, default=None, metavar='NORM',
+    parser.add_argument('--clip_grad', type=float, default=3.0, metavar='NORM',
                         help='Clip gradient norm (default: None, no clipping)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                         help='SGD momentum (default: 0.9)')
@@ -88,9 +88,9 @@ def get_args():
     parser.add_argument('--warmup_steps', type=int, default=-1, metavar='N',
                         help='epochs to warmup LR, if scheduler supports')
 
-    parser.add_argument('--output_dir', default='',
+    parser.add_argument('--output_dir', default='./checkpoints/labram_base',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default=None,
+    parser.add_argument('--log_dir', default='./log/labram_base',
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -113,7 +113,7 @@ def get_args():
     parser.add_argument('--world_size', default=1, type=int,
                         help='number of distributed processes')
     parser.add_argument('--local_rank', default=-1, type=int)
-    parser.add_argument('--dist_on_itp', action='store_true')
+    parser.add_argument('--dist_on_itp', action='store_true', default=True)
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
 
     parser.add_argument('--gradient_accumulation_steps', default=1, type=int)
@@ -171,17 +171,38 @@ def main(args):
 
     # get dataset
     # datasets with the same montage can be packed within a sublist
+    # datasets_train = [
+    #     ["path/to/dataset1", "path/to/dataset2"], # e.g., 64 channels for dataset1 and dataset2
+    #     ["path/to/dataset3", "path/to/dataset4"], # e.g., 32 channels for dataset3 and dataset4
+    # ]
+    # # time window for each sublist in dataset_train
+    # # to ensure the total sequence length be around 256 for each dataset
+    # time_window = [
+    #     4, # set the time window to 4 so that the sequence length is 4 * 64 = 256
+    #     8, # set the time window to 8 so that the sequence length is 8 * 32 = 256
+    # ]
+    # dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window, stride_size=800, start_percentage=0, end_percentage=1)
+
+    # get dataset
+    # datasets with the same montage can be packed within a sublist
     datasets_train = [
-        ["path/to/dataset1", "path/to/dataset2"], # e.g., 64 channels for dataset1 and dataset2
-        ["path/to/dataset3", "path/to/dataset4"], # e.g., 32 channels for dataset3 and dataset4
+        [
+            # '/root/autodl-pub/YYF/EEGdata/TUAB/Processed/TUABtrain.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUAR/Processed/TUAR.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUEP/Processed/TUEP.hdf5',
+            # '/root/autodl-pub/YYF/EEGdata/TUEV/Processed/TUEVtrain.hdf5',
+            '/root/autodl-pub/YYF/EEGdata/TUSL/Processed/TUSL.hdf5',
+            # '/root/autodl-pub/YYF/EEGdata/TUSZ/Processed/TUSZtrain.hdf5',
+        ]
     ]
     # time window for each sublist in dataset_train
     # to ensure the total sequence length be around 256 for each dataset
     time_window = [
-        4, # set the time window to 4 so that the sequence length is 4 * 64 = 256
-        8, # set the time window to 8 so that the sequence length is 8 * 32 = 256
+        5,  # set the time window to 4 so that the sequence length is 4 * 64 = 256
     ]
-    dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window, stride_size=800, start_percentage=0, end_percentage=1)
+    dataset_train_list, train_ch_names_list = utils.build_pretraining_dataset(datasets_train, time_window,
+                                                                              stride_size=200)
+
     # prepare visual tokenizer
     vqkd = get_visual_tokenizer(args).to(device)
 
