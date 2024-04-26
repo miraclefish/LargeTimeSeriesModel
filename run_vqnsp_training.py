@@ -87,16 +87,16 @@ def get_args():
     parser.add_argument('--no_auto_resume', action='store_false', dest='auto_resume')
     parser.set_defaults(auto_resume=True)
 
-    parser.add_argument('--dist_eval', action='store_true', default=True,
+    parser.add_argument('--dist_eval', action='store_true', default=False,
                         help='Enabling distributed evaluation')
-    parser.add_argument('--disable_eval', action='store_true', default=False)
+    parser.add_argument('--disable_eval', action='store_true', default=True)
 
     parser.add_argument('--eval', action='store_true', default=False, help="Perform evaluation only")
     parser.add_argument('--calculate_codebook_usage', action='store_true', default=False)
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=24, type=int)
+    parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem',
@@ -189,7 +189,7 @@ def main(args):
 
     datasets_val = [
         ['/root/autodl-pub/YYF/EEGdata/TUEV/Processed/TUEVeval.hdf5',
-         '/root/autodl-pub/YYF/EEGdata/TUAB/Processed/TUABeval.hdf5',
+         # '/root/autodl-pub/YYF/EEGdata/TUAB/Processed/TUABeval.hdf5',
          # '/root/autodl-pub/YYF/EEGdata/TUSZ/Processed/TUSZdev.hdf5'
          ]
     ]
@@ -213,19 +213,19 @@ def main(args):
 
         print("Sampler_train = %s" % str(sampler_train))
         sampler_eval_list = []
-        if args.dist_eval:
-            # if len(dataset_val) % num_tasks != 0:
-            #     print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-            #           'This will slightly alter validation results as extra duplicate entries are added to achieve '
-            #           'equal num of samples per-process.')
-            for dataset in dataset_val_list:
-                sampler_val = torch.utils.data.DistributedSampler(
-                    dataset, num_replicas=num_tasks, rank=global_rank, shuffle=False)
-                sampler_eval_list.append(sampler_val)
-        else:
-            for dataset in dataset_val_list:
-                sampler_val = torch.utils.data.SequentialSampler(dataset)
-                sampler_eval_list.append(sampler_val)
+        # if args.dist_eval:
+        #     # if len(dataset_val) % num_tasks != 0:
+        #     #     print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+        #     #           'This will slightly alter validation results as extra duplicate entries are added to achieve '
+        #     #           'equal num of samples per-process.')
+        #     for dataset in dataset_val_list:
+        #         sampler_val = torch.utils.data.DistributedSampler(
+        #             dataset, num_replicas=num_tasks, rank=global_rank, shuffle=False)
+        #         sampler_eval_list.append(sampler_val)
+        # else:
+        #     for dataset in dataset_val_list:
+        #         sampler_val = torch.utils.data.SequentialSampler(dataset)
+        #         sampler_eval_list.append(sampler_val)
     else:
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
