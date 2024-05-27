@@ -246,7 +246,9 @@ def main(args, ds_init):
 
     cudnn.benchmark = True
 
-    #dataset_train, args.nb_classes = build_dataset(is_train=True, args=args)
+    # dataset_train, dataset_test, dataset_val: follows the standard format of torch.utils.data.Dataset.
+    # ch_names: list of strings, channel names of the dataset. It should be in capital letters.
+    # metrics: list of strings, the metrics you want to use. We utilize PyHealth to implement it.
     dataset_train, dataset_test, dataset_val, ch_names, metrics = get_dataset(args)
 
     if args.disable_eval_during_finetuning:
@@ -492,7 +494,7 @@ def main(args, ds_init):
             val_stats = evaluate(data_loader_val, model, device, header='Val:', ch_names=ch_names, metrics=metrics, is_binary=args.nb_classes == 1)
             print(f"Accuracy of the network on the {len(dataset_val)} val EEG: {val_stats['accuracy']:.2f}%")
             test_stats = evaluate(data_loader_test, model, device, header='Test:', ch_names=ch_names, metrics=metrics, is_binary=args.nb_classes == 1)
-            print(f"Accuracy of the network on the {len(dataset_val)} test EEG: {val_stats['accuracy']:.2f}%")
+            print(f"Accuracy of the network on the {len(dataset_test)} test EEG: {test_stats['accuracy']:.2f}%")
             
             if max_accuracy < val_stats["accuracy"]:
                 max_accuracy = val_stats["accuracy"]
